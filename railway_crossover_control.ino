@@ -23,17 +23,16 @@
 // PIN DEFINITIONS
 // ============================================================================
 
-// Points position sensor (reads current points position)
-// LOW = Points set for Line 1 (right to left)
-// HIGH = Points set for Line 2 (left to right)
+// Points position sensor - connected to Tortoise motor's 12V bipolar LED
+// via resistor divider (10kΩ from LED + 5kΩ to GND brings 12V down to ~4V safe for Arduino)
+// LED polarity indicates points position:
+// LOW = Points set for Line 1 (right to left) - LED reverse biased
+// HIGH = Points set for Line 2 (left to right) - LED forward biased
 const int POINTS_SENSOR_PIN = 2;
 
 // Relay control pins (Active LOW - relay energizes when pin is LOW)
 const int RELAY_LINE1_RIGHT_TO_LEFT = 3;  // Controls power to Line 1, right approach
 const int RELAY_LINE2_LEFT_TO_RIGHT = 4;  // Controls power to Line 2, left approach
-
-// Optional: Points motor control (if using servo or motor to change points)
-const int POINTS_MOTOR_PIN = 9;  // PWM pin for servo
 
 // Optional: LED indicators for visual feedback
 const int LED_LINE1_BLOCKED = 5;
@@ -69,8 +68,8 @@ void setup() {
   Serial.begin(9600);
   Serial.println("Railway Crossover Control System Initializing...");
 
-  // Configure input pins
-  pinMode(POINTS_SENSOR_PIN, INPUT_PULLUP);
+  // Configure input pins (using external resistor divider, no pullup needed)
+  pinMode(POINTS_SENSOR_PIN, INPUT);
 
   // Configure relay output pins
   pinMode(RELAY_LINE1_RIGHT_TO_LEFT, OUTPUT);

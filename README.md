@@ -48,17 +48,22 @@ Line 2: __________________________________
 ## Hardware Required
 
 - Arduino (Uno, Nano, or similar)
-- 2x Relay modules (5V)
-- 1x Points position sensor (microswitch/reed switch)
-- 3x LEDs with 220Ω resistors (optional)
-- Power supply and wiring
+- 2x Relay modules (5V, optocoupler isolated)
+- 1x Tortoise slow-motion point motor (with 12V bipolar LED)
+- 1x 10kΩ resistor + 1x 5kΩ resistor (voltage divider)
+- 3x LEDs with 220Ω resistors (optional status indicators)
+- 12V power supply (for Tortoise and track)
+- 5V power supply (for Arduino)
+- Connecting wires
 
-See `WIRING_DIAGRAM.md` for complete component list.
+See `WIRING_DIAGRAM.md` for complete component list and detailed wiring instructions.
 
 ## Safety
 
 ⚠️ **Read the safety notes in WIRING_DIAGRAM.md before connecting track power!**
 
+- **CRITICAL**: Never connect 12V directly to Arduino - always use the voltage divider (10kΩ + 5kΩ)
+- Test voltage divider output with multimeter before connecting to Arduino (~4V expected)
 - Always use proper relays rated for your track current
 - Use optocoupler-isolated relays to protect the Arduino
 - Add fuses to track power circuits
