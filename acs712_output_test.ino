@@ -29,9 +29,10 @@ const int LIGHT_RIGHT_PIN = 10;
 // -----------------------------------------------------------------------------
 
 const int CALIBRATION_SAMPLES = 400;
-const int OCCUPANCY_THRESHOLD = 3;  // Lowered to 3 for 100mA train signal (~2-4 ADC units)
+const int OCCUPANCY_THRESHOLD = 2;  // Lowered to 2 to match observed 100mA signal (-2 ADC units)
 const int FILTER_SAMPLES = 5;  // Number of samples for moving average filter
 const unsigned long SENSOR_READ_INTERVAL = 100;  // Display update rate for continuous monitoring
+const unsigned long MIN_ACTIVATION_TIME = 2000;  // Minimum time crossing stays active (ms)
 const int LIGHT_ACTIVE_STATE = HIGH;
 const int LIGHT_INACTIVE_STATE = LOW;
 
@@ -209,10 +210,16 @@ void displayBaselines() {
     Serial.print((sensors[i].baseline * 5.0) / 1023.0, 3);
     Serial.println(F("V)"));
   }
-  Serial.println(F("Threshold: "));
-  Serial.print(F("  "));
+  Serial.println(F("Detection Settings:"));
+  Serial.print(F("  Threshold: "));
   Serial.print(OCCUPANCY_THRESHOLD);
-  Serial.println(F(" ADC units from baseline (with 5-sample averaging)"));
+  Serial.println(F(" ADC units from baseline"));
+  Serial.print(F("  Filtering: "));
+  Serial.print(FILTER_SAMPLES);
+  Serial.println(F("-sample moving average"));
+  Serial.print(F("  Min activation time: "));
+  Serial.print(MIN_ACTIVATION_TIME);
+  Serial.println(F("ms"));
   Serial.println();
 }
 
@@ -484,6 +491,9 @@ void continuousMonitor() {
   Serial.println(F("\n=== Test 6: Continuous Monitor Mode ==="));
   Serial.println(F("Real-time display of all sensor and output states."));
   Serial.println(F("Lights will activate automatically when train detected."));
+  Serial.print(F("Minimum activation time: "));
+  Serial.print(MIN_ACTIVATION_TIME);
+  Serial.println(F("ms"));
   Serial.println(F("Send any character to stop.\n"));
   delay(1000);
 
@@ -493,6 +503,7 @@ void continuousMonitor() {
   }
 
   bool crossingActive = false;
+  unsigned long activationTime = 0;
 
   while (!Serial.available()) {
     unsigned long now = millis();
@@ -507,15 +518,25 @@ void continuousMonitor() {
     // Determine if any sensor is detecting
     bool anyDetection = sensors[0].thresholdExceeded || sensors[1].thresholdExceeded;
 
-    // Update crossing state
+    // Update crossing state with hysteresis
     if (anyDetection && !crossingActive) {
       crossingActive = true;
+      activationTime = now;
       Serial.println(F("\n*** CROSSING ACTIVATED ***"));
     } else if (!anyDetection && crossingActive) {
-      crossingActive = false;
-      digitalWrite(LIGHT_LEFT_PIN, LIGHT_INACTIVE_STATE);
-      digitalWrite(LIGHT_RIGHT_PIN, LIGHT_INACTIVE_STATE);
-      Serial.println(F("\n*** CROSSING DEACTIVATED ***"));
+      // Only deactivate if minimum time has elapsed
+      unsigned long activeFor = now - activationTime;
+      if (activeFor >= MIN_ACTIVATION_TIME) {
+        crossingActive = false;
+        digitalWrite(LIGHT_LEFT_PIN, LIGHT_INACTIVE_STATE);
+        digitalWrite(LIGHT_RIGHT_PIN, LIGHT_INACTIVE_STATE);
+        Serial.print(F("\n*** CROSSING DEACTIVATED (active for "));
+        Serial.print(activeFor);
+        Serial.println(F("ms) ***"));
+      }
+    } else if (anyDetection && crossingActive) {
+      // Reset activation time if train still detected (extends duration)
+      activationTime = now;
     }
 
     // Control lights - alternating flash when active
