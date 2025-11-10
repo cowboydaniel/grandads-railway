@@ -35,8 +35,8 @@ const unsigned long REPORT_INTERVAL = 1000; // Report statistics every 1 second
 const float VOLTAGE_REFERENCE = 5.0;
 const int ADC_RESOLUTION = 1024;
 
-// Threshold for analog reading (match digital threshold at ~2.5V)
-const int ANALOG_THRESHOLD = 512;  // Midpoint of 0-1023 (~2.5V)
+// Threshold for analog reading (set to 2V to match LED characteristics)
+const int ANALOG_THRESHOLD = 410;  // 2.0V = (2.0/5.0) * 1024 ≈ 410
 
 // ============================================================================
 // GLOBAL VARIABLES
