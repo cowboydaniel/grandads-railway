@@ -26,10 +26,10 @@
 
 // Crossover sensor - connected to Tortoise motor's bipolar LED
 // Bipolar LED operation (current reverses polarity):
-// - When RED LED on (one polarity) = Crossover ACTIVE (blocks both lines) - reads LOW
-// - When GREEN LED on (opposite polarity) = Crossover INACTIVE (both lines free) - reads HIGH
-// Pin directly senses the LED polarity/current direction
-const int CROSSOVER_SENSOR_PIN = 2;
+// - When RED LED on (one polarity) = Crossover ACTIVE (blocks both lines) - analog < threshold
+// - When GREEN LED on (opposite polarity) = Crossover INACTIVE (both lines free) - analog >= threshold
+// Uses analog reading with threshold for more reliable detection
+const int CROSSOVER_SENSOR_PIN = A2;
 
 // Relay control pins (Active LOW - relay energizes when pin is LOW)
 const int RELAY_LINE1_RIGHT_TO_LEFT = 3;  // Controls power to Line 1, right approach
@@ -44,6 +44,9 @@ const int CROSSOVER_INACTIVE = HIGH; // Crossover inactive (both lines free)
 
 const int TRACK_POWER_ON = HIGH;     // Relay OFF (power flows to track)
 const int TRACK_POWER_OFF = LOW;     // Relay ON (power cut from track)
+
+// Analog threshold for LED sensing (410 = 2.0V with 5V reference)
+const int ANALOG_THRESHOLD = 410;
 
 const unsigned long DEBOUNCE_DELAY = 50;  // Debounce delay in milliseconds
 
@@ -64,8 +67,7 @@ void setup() {
   Serial.begin(9600);
   Serial.println("Railway Crossover Control System - Coacting Point Initializing...");
 
-  // Configure input pin (sensing LED voltage directly, no pullup needed)
-  pinMode(CROSSOVER_SENSOR_PIN, INPUT);
+  // Analog pins don't need pinMode configuration
 
   // Configure relay output pins
   pinMode(RELAY_LINE1_RIGHT_TO_LEFT, OUTPUT);
@@ -75,10 +77,12 @@ void setup() {
   digitalWrite(RELAY_LINE1_RIGHT_TO_LEFT, TRACK_POWER_OFF);
   digitalWrite(RELAY_LINE2_LEFT_TO_RIGHT, TRACK_POWER_OFF);
 
-  // Read initial crossover state
-  currentCrossoverState = digitalRead(CROSSOVER_SENSOR_PIN);
+  // Read initial crossover state using analog threshold
+  int analogReading = analogRead(CROSSOVER_SENSOR_PIN);
+  currentCrossoverState = (analogReading >= ANALOG_THRESHOLD) ? CROSSOVER_INACTIVE : CROSSOVER_ACTIVE;
 
   Serial.println("System Ready!");
+  Serial.println("Analog Reading: " + String(analogReading) + " (threshold: " + String(ANALOG_THRESHOLD) + ")");
   Serial.println("Crossover State: " + String(currentCrossoverState == CROSSOVER_ACTIVE ? "ACTIVE (both blocked)" : "INACTIVE (both free)"));
 }
 
@@ -103,9 +107,11 @@ void loop() {
 
 /**
  * Read crossover state with debouncing to prevent false triggers
+ * Uses analog reading with threshold for more reliable LED detection
  */
 void readCrossoverState() {
-  int reading = digitalRead(CROSSOVER_SENSOR_PIN);
+  int analogReading = analogRead(CROSSOVER_SENSOR_PIN);
+  int reading = (analogReading >= ANALOG_THRESHOLD) ? CROSSOVER_INACTIVE : CROSSOVER_ACTIVE;
 
   // If reading changed, reset debounce timer
   if (reading != lastCrossoverReading) {
@@ -117,8 +123,9 @@ void readCrossoverState() {
     if (reading != currentCrossoverState) {
       currentCrossoverState = reading;
 
-      // Log crossover state change
+      // Log crossover state change with analog value
       Serial.println("Crossover changed to: " + String(currentCrossoverState == CROSSOVER_ACTIVE ? "ACTIVE (both blocked)" : "INACTIVE (both free)"));
+      Serial.println("  Analog reading: " + String(analogReading) + " (threshold: " + String(ANALOG_THRESHOLD) + ")");
     }
   }
 
