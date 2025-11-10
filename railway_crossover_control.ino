@@ -24,10 +24,11 @@
 // ============================================================================
 
 // Points position sensor - connected to Tortoise motor's 12V bipolar LED
-// via resistor divider (10kΩ from LED + 5kΩ to GND brings 12V down to ~4V safe for Arduino)
-// LED polarity indicates points position:
-// LOW = Points set for Line 1 (right to left) - LED reverse biased
-// HIGH = Points set for Line 2 (left to right) - LED forward biased
+// Sensing directly after the current-limiting resistor (at the LED itself)
+// LED forward voltage indicates points position:
+// ~1.9V when red LED = Points set for Line 1 (right to left) - reads LOW/borderline
+// ~2.1V when green LED = Points set for Line 2 (left to right) - reads HIGH
+// Both voltages are safe for Arduino (well under 5V threshold)
 const int POINTS_SENSOR_PIN = 2;
 
 // Relay control pins (Active LOW - relay energizes when pin is LOW)

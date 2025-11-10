@@ -49,12 +49,13 @@ Line 2: __________________________________
 
 - Arduino (Uno, Nano, or similar)
 - 2x Relay modules (5V, optocoupler isolated)
-- 1x Tortoise slow-motion point motor (with 12V bipolar LED)
-- 1x 10kΩ resistor + 1x 5kΩ resistor (voltage divider)
+- 1x Tortoise slow-motion point motor (with 12V bipolar LED and internal resistor)
 - 3x LEDs with 220Ω resistors (optional status indicators)
 - 12V power supply (for Tortoise and track)
 - 5V power supply (for Arduino)
 - Connecting wires
+
+**Note**: Senses LED forward voltage directly (~1.9-2.1V) - no external voltage divider needed!
 
 See `WIRING_DIAGRAM.md` for complete component list and detailed wiring instructions.
 
@@ -62,8 +63,9 @@ See `WIRING_DIAGRAM.md` for complete component list and detailed wiring instruct
 
 ⚠️ **Read the safety notes in WIRING_DIAGRAM.md before connecting track power!**
 
-- **CRITICAL**: Never connect 12V directly to Arduino - always use the voltage divider (10kΩ + 5kΩ)
-- Test voltage divider output with multimeter before connecting to Arduino (~4V expected)
+- **CRITICAL**: Sense AFTER the LED (at ~2V forward voltage), NOT before it (at 12V)
+- Test sense point voltage with multimeter first (~1.9-2.1V expected, never >5V)
+- If you measure >5V at your sense point, you're at the wrong place!
 - Always use proper relays rated for your track current
 - Use optocoupler-isolated relays to protect the Arduino
 - Add fuses to track power circuits
@@ -90,6 +92,15 @@ Edit these constants in the code to match your setup:
 - `RELAY_LINE1_RIGHT_TO_LEFT` - Relay control pin (default: 3)
 - `RELAY_LINE2_LEFT_TO_RIGHT` - Relay control pin (default: 4)
 - `DEBOUNCE_DELAY` - Sensor debounce time in ms (default: 50)
+
+### Detection Reliability Note
+
+The LED forward voltages (1.9V red, 2.1V green) are close and may be in Arduino's threshold "gray zone".
+If position detection is unreliable:
+- Consider using an analog input (A0-A5) and reading actual voltage values
+- Add a comparator circuit with 2.0V reference
+- Use the Tortoise's SPDT auxiliary contacts instead
+- See `WIRING_DIAGRAM.md` for detailed alternative solutions
 
 ## Troubleshooting
 
