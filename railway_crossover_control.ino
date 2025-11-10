@@ -24,12 +24,11 @@
 // PIN DEFINITIONS
 // ============================================================================
 
-// Crossover sensor - connected to Tortoise motor's 12V bipolar LED
-// Sensing directly after the current-limiting resistor (at the LED itself)
-// LED forward voltage indicates crossover position:
-// ~1.9V when red LED = Crossover ACTIVE (blocks both lines) - reads LOW
-// ~2.1V when green LED = Crossover INACTIVE (both lines free) - reads HIGH
-// Both voltages are safe for Arduino (well under 5V threshold)
+// Crossover sensor - connected to Tortoise motor's bipolar LED
+// Bipolar LED operation (current reverses polarity):
+// - When RED LED on (one polarity) = Crossover ACTIVE (blocks both lines) - reads LOW
+// - When GREEN LED on (opposite polarity) = Crossover INACTIVE (both lines free) - reads HIGH
+// Pin directly senses the LED polarity/current direction
 const int CROSSOVER_SENSOR_PIN = 2;
 
 // Relay control pins (Active LOW - relay energizes when pin is LOW)
