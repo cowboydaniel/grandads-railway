@@ -214,6 +214,11 @@ void testRawSensorReadings() {
   Serial.println(F("Time(ms)\tWest_ADC\tWest_V\t\tEast_ADC\tEast_V"));
   Serial.println(F("--------\t--------\t------\t\t--------\t------"));
 
+  // Clear any stray characters from serial buffer before starting
+  while (Serial.available()) {
+    Serial.read();
+  }
+
   while (!Serial.available()) {
     unsigned long now = millis();
     int westReading = analogRead(SENSOR_WEST_PIN);
@@ -249,6 +254,11 @@ void testThresholdDetection() {
 
   Serial.println(F("Time(ms)\tSensor\tReading\tBaseline\tDelta\tDetected"));
   Serial.println(F("--------\t------\t-------\t--------\t-----\t--------"));
+
+  // Clear any stray characters from serial buffer before starting
+  while (Serial.available()) {
+    Serial.read();
+  }
 
   while (!Serial.available()) {
     unsigned long now = millis();
@@ -460,6 +470,11 @@ void continuousMonitor() {
   Serial.println(F("Real-time display of all sensor and output states."));
   Serial.println(F("Send any character to stop.\n"));
   delay(1000);
+
+  // Clear any stray characters from serial buffer before starting
+  while (Serial.available()) {
+    Serial.read();
+  }
 
   while (!Serial.available()) {
     unsigned long now = millis();
