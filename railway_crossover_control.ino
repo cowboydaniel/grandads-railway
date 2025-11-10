@@ -49,6 +49,7 @@ const int ROUTE_LINE2_TO_LINE3 = 1;  // Y junction routing Line 2 → Line 3
 
 // Analog threshold for LED sensing (410 ≈ 2.0V with 5V reference)
 const int ANALOG_THRESHOLD = 410;
+const int ANALOG_HYSTERESIS = 8;    // Require this delta past the threshold before flipping states
 
 const unsigned long DEBOUNCE_DELAY = 50;          // Debounce delay (ms)
 const unsigned long SENSOR_SAMPLE_INTERVAL = 10;  // Minimum interval between reads (ms)
@@ -81,6 +82,7 @@ const char* describeState(const PointControl& point, int state);
 void initializePoint(PointControl& point);
 void updatePoint(PointControl& point, unsigned long now);
 int interpretState(const PointControl& point, int analogValue);
+int rawStateFromThreshold(const PointControl& point, int analogValue);
 void applyPointLogic(PointControl& point);
 
 PointControl pointControls[] = {
@@ -176,7 +178,7 @@ void initializePoint(PointControl& point) {
 
   int analogValue = analogRead(point.sensorPin);
   point.lastAnalogValue = analogValue;
-  point.currentState = interpretState(point, analogValue);
+  point.currentState = rawStateFromThreshold(point, analogValue);
   point.lastReading = point.currentState;
   point.lastStatus = -1;  // force log on first apply
 
@@ -210,10 +212,26 @@ void updatePoint(PointControl& point, unsigned long now) {
 
 int interpretState(const PointControl& point, int analogValue) {
   if (point.type == POINT_COACTING) {
-    return (analogValue >= point.analogThreshold) ? CROSSOVER_INACTIVE : CROSSOVER_ACTIVE;
+    if (point.currentState == CROSSOVER_ACTIVE) {
+      return (analogValue >= point.analogThreshold + ANALOG_HYSTERESIS) ? CROSSOVER_INACTIVE : CROSSOVER_ACTIVE;
+    } else {
+      return (analogValue <= point.analogThreshold - ANALOG_HYSTERESIS) ? CROSSOVER_ACTIVE : CROSSOVER_INACTIVE;
+    }
   }
 
   // POINT_Y_BRANCH logic
+  if (point.currentState == ROUTE_LINE1_TO_LINE3) {
+    return (analogValue >= point.analogThreshold + ANALOG_HYSTERESIS) ? ROUTE_LINE2_TO_LINE3 : ROUTE_LINE1_TO_LINE3;
+  }
+
+  return (analogValue <= point.analogThreshold - ANALOG_HYSTERESIS) ? ROUTE_LINE1_TO_LINE3 : ROUTE_LINE2_TO_LINE3;
+}
+
+int rawStateFromThreshold(const PointControl& point, int analogValue) {
+  if (point.type == POINT_COACTING) {
+    return (analogValue >= point.analogThreshold) ? CROSSOVER_INACTIVE : CROSSOVER_ACTIVE;
+  }
+
   return (analogValue >= point.analogThreshold) ? ROUTE_LINE2_TO_LINE3 : ROUTE_LINE1_TO_LINE3;
 }
 
