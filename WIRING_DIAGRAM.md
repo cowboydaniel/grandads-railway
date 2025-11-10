@@ -5,11 +5,9 @@
 ### Required Components:
 - 1x Arduino (Uno, Nano, or similar)
 - 2x Relay modules (5V, optocoupler isolated recommended)
-- 1x Tortoise point motor (with built-in 12V bipolar LED)
-- 1x 10kΩ resistor (for voltage divider)
-- 1x 5kΩ resistor (for voltage divider) - or use 4.7kΩ
-- 3x LEDs (optional, for visual feedback)
-- 3x 220Ω resistors (for status LEDs)
+- 1x Tortoise point motor (with built-in 12V bipolar LED and current-limiting resistor)
+- 3x LEDs (optional, for visual feedback on control panel)
+- 3x 220Ω resistors (for optional status LEDs)
 - 12V power supply for Tortoise motor
 - 5V power supply for Arduino (USB or 7-12V DC via barrel jack)
 - Connecting wires
@@ -20,27 +18,30 @@
 
 ## Pin Connections
 
-### Input (Points Position Sensor - Tortoise LED via Resistor Divider)
+### Input (Points Position Sensor - Tortoise LED Direct Connection)
 ```
-Tortoise Bipolar LED → Resistor Divider → Arduino Pin 2
+Tortoise Bipolar LED → Arduino Pin 2
 
-Circuit:
-  Tortoise LED Terminal 1 (12V when points set one way)
-    ↓
-  10kΩ resistor (R1)
-    ↓
-    ├─────→ Arduino Pin 2 (reads ~4V when LED forward biased, ~0V when reverse)
-    ↓
-  5kΩ resistor (R2) - can substitute 4.7kΩ
-    ↓
-  GND
+Connection:
+  Sense after the Tortoise's internal current-limiting resistor
+  Connect directly to Arduino Pin 2 (no external voltage divider needed)
 
-Tortoise LED Terminal 2 connects to the opposite polarity from Tortoise motor driver
+  12V+ → Tortoise Resistor → LED → Sense Point → 12V-
+                                        ↓
+                                  Arduino Pin 2
 
 How it works:
-- When Tortoise moves points to Line 1: LED reverse biased → Pin 2 reads LOW
-- When Tortoise moves points to Line 2: LED forward biased → ~12V divided to ~4V → Pin 2 reads HIGH
-- Voltage divider formula: Vout = Vin × (R2 / (R1 + R2)) = 12V × (5k / 15k) = 4V (safe for Arduino)
+- Red LED (one polarity): Forward voltage ~1.9V → Pin 2 reads this directly (LOW/borderline)
+- Green LED (reversed polarity): Forward voltage ~2.1V → Pin 2 reads this directly (HIGH)
+- Both voltages are inherently safe for Arduino (< 5V)
+- The LED forward voltage drop provides natural voltage limiting
+- No external resistor divider required
+
+Typical Arduino thresholds:
+- Input LOW: < 1.5V (typical)
+- Input HIGH: > 3.0V (typical)
+- The 1.9V and 2.1V readings are close, so test to confirm reliable detection
+- If readings are unreliable, you may need a small external circuit (see troubleshooting)
 ```
 
 ### Outputs (Relays)
@@ -111,26 +112,35 @@ Right Section (R→L): Direct power (always on)
   Track - → Power Supply -
 ```
 
-## Tortoise LED Polarity Detection
+## Tortoise LED Voltage Sensing
 
-The Tortoise motor's built-in bipolar LED changes polarity based on points position:
+The Tortoise motor's built-in bipolar LED provides different forward voltages for position detection:
 
 ```
-LED Polarity indicates points direction:
+LED voltage indicates points direction:
 
-LOW  = Points favor Line 1 (R→L) - LED reverse biased, minimal voltage to Pin 2
-HIGH = Points favor Line 2 (L→R) - LED forward biased, ~4V to Pin 2 via divider
+~1.9V (Red LED) = Points favor Line 1 (R→L) - Pin 2 may read LOW (borderline threshold)
+~2.1V (Green LED) = Points favor Line 2 (L→R) - Pin 2 may read HIGH (borderline threshold)
 
 Wiring Notes:
-- Connect to Tortoise LED terminals (pins 2-3 or 6-7, both sets are identical)
-- Polarity depends on how you wire the Tortoise motor power
+- Connect sense wire to Tortoise LED circuit after the internal current-limiting resistor
+- Tap the connection point between LED and ground return
+- Connect directly to Arduino Pin 2 (no external components needed)
+- Polarity/color depends on how you wire the Tortoise motor power
 - If readings are inverted, swap the Tortoise motor power wires (pins 1 & 8)
-- The resistor divider ensures Arduino safety (12V → 4V max)
 
-Testing:
-- Manually toggle Tortoise with DPDT switch
-- Watch Serial Monitor to confirm correct polarity readings
-- If inverted, swap either motor wires OR LED divider connection
+Important Considerations:
+- Both voltages (1.9V and 2.1V) are in the Arduino's "gray zone" for digital inputs
+- Standard Arduino HIGH threshold: ~3.0V (typ), LOW threshold: ~1.5V (typ)
+- The 200mV difference may not be reliably detected as HIGH vs LOW
+- Test thoroughly with Serial Monitor to confirm your Arduino can distinguish these levels
+- If unreliable, consider adding a comparator or voltage level shifter
+
+Alternative Solutions if Detection is Unreliable:
+1. Use an analog input (A0-A5) and read actual voltage values
+2. Add a comparator circuit with 2.0V reference
+3. Add a simple op-amp buffer/level shifter
+4. Use the Tortoise auxiliary contacts (SPDT pins 1-4-5) instead
 ```
 
 ## Power Supply Recommendations
@@ -146,33 +156,35 @@ Testing:
 
 ⚠️ **IMPORTANT SAFETY WARNINGS:**
 
-1. **Never** connect 12V directly to Arduino pins - always use the resistor divider
-2. **Never** connect track power directly to Arduino pins
-3. **Always** use relays to switch track power
-4. **Use** optocoupler-isolated relays to protect the Arduino
-5. **Ensure** relay current rating exceeds your maximum track current
-6. **Verify** resistor divider values before connecting (10kΩ + 5kΩ brings 12V → 4V)
-7. **Add** fuses to track power circuits (1-3A recommended)
-8. **Test** voltage divider output with multimeter first (~4V expected)
-9. **Test** with low voltage first before connecting full track power
+1. **Verify** you're sensing AFTER the LED (at LED forward voltage ~2V, NOT before LED at 12V)
+2. **Test** sense point voltage with multimeter first (~1.9-2.1V expected, never >5V)
+3. **Never** connect the 12V rail or pre-resistor point directly to Arduino pins
+4. **Never** connect track power directly to Arduino pins
+5. **Always** use relays to switch track power
+6. **Use** optocoupler-isolated relays to protect the Arduino
+7. **Ensure** relay current rating exceeds your maximum track current
+8. **Add** fuses to track power circuits (1-3A recommended)
+9. **Test** voltage levels thoroughly before connecting to Arduino
 10. **Double-check** all wiring before powering on
 
 ## Testing Procedure
 
-1. **Voltage Divider Test (CRITICAL - Do this first!)**
-   - Build the resistor divider circuit (10kΩ + 5kΩ)
-   - Connect 12V to the top of the divider
-   - Measure voltage at the Arduino pin connection point
-   - Should read approximately 4V (3.8V - 4.2V is acceptable)
-   - **DO NOT** connect to Arduino until voltage is verified safe (<5V)
+1. **LED Voltage Test (CRITICAL - Do this first!)**
+   - Power up the Tortoise motor circuit (do NOT connect to Arduino yet)
+   - Use multimeter to measure voltage at your sense point (after LED, before ground)
+   - Toggle Tortoise between positions with DPDT switch
+   - Verify readings: ~1.9V (one position) and ~2.1V (other position)
+   - **CRITICAL**: If you see voltages >5V, you're at the wrong point! Find the LED side.
+   - **DO NOT** connect to Arduino until voltage is verified safe (1.5-2.5V range)
 
 2. **Initial Test (No Track Power)**
    - Upload code to Arduino
-   - Connect voltage divider to Arduino Pin 2
+   - Connect sense wire to Arduino Pin 2
    - Open Serial Monitor (9600 baud)
    - Manually toggle Tortoise with DPDT switch
-   - Verify serial output shows correct points position changes
-   - If inverted, swap Tortoise motor wires or LED connections
+   - Verify serial output shows points position changes
+   - **NOTE**: If position detection is unreliable/intermittent, see "Alternative Solutions" section
+   - If inverted (but detection works), swap Tortoise motor wires (pins 1 & 8)
 
 3. **Status LED Test**
    - Check that status LEDs illuminate correctly when Tortoise moves
@@ -203,56 +215,67 @@ Testing:
 
 | Problem | Possible Cause | Solution |
 |---------|---------------|----------|
-| Arduino damage/erratic | 12V connected directly to pin | Check voltage divider, ensure <5V at Arduino pin |
-| Points position inverted | LED polarity reversed | Swap Tortoise motor wires (pins 1 & 8) |
-| No position detection | Voltage divider wrong | Verify 10kΩ and 5kΩ values, check connections |
+| Arduino damage/erratic | 12V connected to pin (wrong sense point) | Verify sense point with multimeter, should be ~2V not 12V |
+| No position changes detected | Both LEDs read same (1.9V/2.1V too close) | Use analog input A0 instead, or add comparator circuit |
+| Points position inverted | LED color mapping reversed | Swap Tortoise motor wires (pins 1 & 8) |
+| Always reads HIGH or LOW | Sense point disconnected | Check connection with multimeter, verify continuity |
 | Relays always on/off | Wrong relay type (active HIGH vs LOW) | Check relay module type, may need to invert logic |
-| Intermittent readings | Poor resistor connections | Solder resistor divider joints |
+| Intermittent/unreliable readings | Voltage too close to threshold | Switch to analog input or add level shifter |
 | Tortoise not moving | No power to motor | Check 12V supply and DPDT switch wiring |
 | Arduino resets | Power supply insufficient | Use separate power supply for Arduino |
 | Relays chattering | Debounce time too short | Increase DEBOUNCE_DELAY in code |
-| Pin reads always HIGH/LOW | Voltage divider disconnected | Check all divider connections with multimeter |
+| Reads >5V at sense point | Wrong tap point (before LED) | Move sense point to after LED (lower voltage side) |
 
 ## Schematic Diagram (ASCII)
 
 ```
-   Tortoise Motor              Arduino                    Track Power
-   ┌──────────┐              ┌─────────┐
-   │  12V LED │              │         │
-   │Terminal  ├──────┐       │         │
-   └──────────┘      │       │         │
-                  10kΩ       │         │
-                     │       │         │
-                     ├───────┤Pin 2    │
-                     │       │         │
-                   5kΩ       │    Pin 3├───► Relay 1 ───► Line 1 (R→L)
-                     │       │    Pin 4├───► Relay 2 ───► Line 2 (L→R)
-                    GND      │         │
-                             │    Pin 5├───► LED 1 (Line 1 blocked)
-                             │    Pin 6├───► LED 2 (Line 2 blocked)
-                             │    Pin 7├───► LED 3 (Points position)
-                             │         │
-                             │  5V  GND│
-                             └──┬───┬──┘
-                                │   │
-                             Power  Ground
+   Tortoise Motor Circuit      Arduino                Track Power Control
 
-Tortoise Motor Control:
    12V+ ──┬── DPDT ──┬── Pin 1 (Black)
-          │  Switch  │
+          │  Switch  │   Tortoise
    GND ───┴─────────┴── Pin 8 (Red)
 
-   (Flip DPDT to reverse polarity and change points)
+   Internal LED Circuit:
+
+   12V ───► [Resistor] ───► [Bipolar LED] ───┬───► GND
+                                              │
+                                    Sense Point (1.9-2.1V)
+                                              │
+                         Arduino              │
+                       ┌─────────┐            │
+                       │         │            │
+                       │    Pin 2├────────────┘
+                       │         │
+                       │    Pin 3├───► Relay 1 ───► Line 1 (R→L) Track Section
+                       │    Pin 4├───► Relay 2 ───► Line 2 (L→R) Track Section
+                       │         │
+                       │    Pin 5├───► LED 1 (Line 1 blocked indicator)
+                       │    Pin 6├───► LED 2 (Line 2 blocked indicator)
+                       │    Pin 7├───► LED 3 (Points position indicator)
+                       │         │
+                       │  5V  GND│
+                       └──┬───┬──┘
+                          │   │
+                       Power  Ground
+
+Key Points:
+- Sense point taps between LED and ground (after current-limiting resistor)
+- No external voltage divider needed
+- LED forward voltage (1.9-2.1V) is naturally Arduino-safe
+- DPDT switch reverses polarity to Tortoise, changing points direction
 ```
 
 ## Additional Notes
 
 - **Tortoise Compatibility**: This design works with Tortoise slow-motion point motors and their built-in 12V bipolar LEDs
-- **Voltage Divider**: Essential to bring 12V down to 4V for Arduino safety - do not skip this!
-- **Resistor Values**: 10kΩ + 5kΩ is ideal, but 10kΩ + 4.7kΩ also works (gives ~4.2V)
+- **Simplified Sensing**: By sensing at the LED (after current-limiting resistor), no external voltage divider is needed
+- **Voltage Levels**: LED forward voltages (1.9V red, 2.1V green) are naturally Arduino-safe
+- **Detection Reliability**: The 200mV difference between red/green may be marginal for reliable digital input detection
+- **Analog Alternative**: If digital detection is unreliable, change to analog input (analogRead on A0-A5)
 - **Relay Logic**: Active LOW (Arduino pin LOW = relay ON = track power OFF)
 - **Alternative Relays**: If using different relay modules, you may need to invert the logic in code
 - **DPDT Switch**: Allows manual control of Tortoise and serves as backup if Arduino fails
 - **Tortoise LED Sets**: Tortoise has two identical LED terminal sets (pins 2-3 and 6-7) - use either one
 - **Emergency Stop**: Consider adding a button wired to call the `emergencyStop()` function
 - **Expansion**: Tortoise also has SPDT auxiliary contacts (pins 1-4-5) that can control other accessories
+- **Alternative Sensor**: If LED sensing proves unreliable, consider using the Tortoise SPDT contacts instead
