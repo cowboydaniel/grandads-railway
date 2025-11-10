@@ -1,27 +1,28 @@
 /*
  * LED Sense Test - Analog vs Digital Reading Comparison
  *
- * This test reads the LED voltage from a Tortoise motor using both
+ * This test reads a bipolar LED from a Tortoise motor using both
  * analog and digital methods to determine which is more reliable.
  *
- * Expected voltages:
- * - Red LED: ~1.9V (Crossover ACTIVE)
- * - Green LED: ~2.1V (Crossover INACTIVE)
+ * BIPOLAR LED Operation:
+ * - When current flows one direction -> GREEN LED on -> Pin reads HIGH
+ * - When current flows other direction -> RED LED on -> Pin reads LOW
  *
- * Arduino thresholds:
- * - Digital: ~2.5V (anything above reads HIGH, below reads LOW)
- * - Analog: 0-1023 (0 = 0V, 1023 = 5V reference)
+ * Testing:
+ * - Digital: Direct HIGH/LOW reading
+ * - Analog: Numeric value (helps detect noise/fluctuations)
+ *
+ * This test determines which method provides more stable/reliable readings.
  */
 
 // ============================================================================
 // PIN DEFINITIONS
 // ============================================================================
 
-const int LED_SENSE_PIN = 2;  // Pin to test (can be used for both digital and analog on most pins)
+const int LED_SENSE_PIN = 2;  // Digital pin to read bipolar LED state
 
-// Note: For analog reading, we'll use A2 which corresponds to digital pin 2 on some boards
-// Adjust this based on your Arduino model
-const int LED_ANALOG_PIN = A2;  // Analog input pin (change to A0-A5 as needed for your wiring)
+// For analog reading comparison (use appropriate analog pin based on your wiring)
+const int LED_ANALOG_PIN = A2;  // Change to match your actual wiring (A0-A5)
 
 // ============================================================================
 // CONSTANTS
@@ -34,8 +35,8 @@ const unsigned long REPORT_INTERVAL = 1000; // Report statistics every 1 second
 const float VOLTAGE_REFERENCE = 5.0;
 const int ADC_RESOLUTION = 1024;
 
-// Threshold for analog reading (midpoint between 1.9V and 2.1V = 2.0V)
-const int ANALOG_THRESHOLD = (2.0 / VOLTAGE_REFERENCE) * ADC_RESOLUTION;  // ~410
+// Threshold for analog reading (match digital threshold at ~2.5V)
+const int ANALOG_THRESHOLD = 512;  // Midpoint of 0-1023 (~2.5V)
 
 // ============================================================================
 // GLOBAL VARIABLES
@@ -75,12 +76,16 @@ void setup() {
   Serial.begin(9600);
 
   Serial.println("=======================================================");
-  Serial.println("LED Sense Test - Analog vs Digital Comparison");
+  Serial.println("Bipolar LED Sense Test - Analog vs Digital");
   Serial.println("=======================================================");
+  Serial.println();
+  Serial.println("Testing bipolar LED from Tortoise motor:");
+  Serial.println("  HIGH = GREEN LED (one polarity)");
+  Serial.println("  LOW  = RED LED   (opposite polarity)");
   Serial.println();
 
   // Configure pins
-  pinMode(LED_SENSE_PIN, INPUT);  // For digital reading (no pullup)
+  pinMode(LED_SENSE_PIN, INPUT);  // For digital reading (no pullup needed)
   pinMode(LED_ANALOG_PIN, INPUT); // For analog reading
 
   Serial.println("Pin Configuration:");
@@ -88,8 +93,9 @@ void setup() {
   Serial.println("  Analog Pin:  A" + String(LED_ANALOG_PIN - A0));
   Serial.println();
 
-  Serial.println("Analog Threshold: " + String(ANALOG_THRESHOLD) + " (~" + String((ANALOG_THRESHOLD * VOLTAGE_REFERENCE) / ADC_RESOLUTION, 2) + "V)");
-  Serial.println("Digital Threshold: ~2.5V (built-in)");
+  Serial.println("Thresholds:");
+  Serial.println("  Digital: ~2.5V (built-in Arduino threshold)");
+  Serial.println("  Analog:  " + String(ANALOG_THRESHOLD) + " (~" + String((ANALOG_THRESHOLD * VOLTAGE_REFERENCE) / ADC_RESOLUTION, 2) + "V)");
   Serial.println();
 
   Serial.println("Starting continuous monitoring...");
@@ -132,12 +138,14 @@ void loop() {
 
 /**
  * Take a sample using both digital and analog methods
+ * Digital: Direct HIGH/LOW reading of bipolar LED polarity
+ * Analog: Numeric reading to detect any noise or fluctuations
  */
 void takeSample() {
-  // Read digital
+  // Read digital (HIGH = green LED, LOW = red LED)
   digitalReading = digitalRead(LED_SENSE_PIN);
 
-  // Read analog
+  // Read analog and convert to digital state for comparison
   analogReading = analogRead(LED_ANALOG_PIN);
   voltage = (analogReading * VOLTAGE_REFERENCE) / ADC_RESOLUTION;
   analogState = (analogReading >= ANALOG_THRESHOLD) ? HIGH : LOW;
