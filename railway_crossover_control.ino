@@ -1,8 +1,8 @@
 /*
- * Railway Crossover Control System
+ * Railway Crossover Control System - Coacting Point
  *
- * Controls two railway lines with a crossover section using relays
- * to stop trains when points are against them.
+ * Controls two railway lines with a coacting crossover point using relays
+ * to block both lines when crossover is active.
  *
  * LINE CONFIGURATION:
  *
@@ -12,43 +12,39 @@
  *                              \
  * Line 2: __________________________________
  *
- * LOGIC:
- * - Line 1, Left→Right: Always free (coacting points)
- * - Line 1, Right→Left: Stopped if points are against them
- * - Line 2, Left→Right: Stopped if points are against them
- * - Line 2, Right→Left: Always free (can go either way)
+ * LOGIC (Coacting Point):
+ * When crossover is ACTIVE (pin 2 LOW):
+ *   - Line 1 Right→Left: BLOCKED
+ *   - Line 2 Left→Right: BLOCKED
+ * When crossover is INACTIVE (pin 2 HIGH):
+ *   - Both lines: FREE
  */
 
 // ============================================================================
 // PIN DEFINITIONS
 // ============================================================================
 
-// Points position sensor - connected to Tortoise motor's 12V bipolar LED
+// Crossover sensor - connected to Tortoise motor's 12V bipolar LED
 // Sensing directly after the current-limiting resistor (at the LED itself)
-// LED forward voltage indicates points position:
-// ~1.9V when red LED = Points set for Line 1 (right to left) - reads LOW/borderline
-// ~2.1V when green LED = Points set for Line 2 (left to right) - reads HIGH
+// LED forward voltage indicates crossover position:
+// ~1.9V when red LED = Crossover ACTIVE (blocks both lines) - reads LOW
+// ~2.1V when green LED = Crossover INACTIVE (both lines free) - reads HIGH
 // Both voltages are safe for Arduino (well under 5V threshold)
-const int POINTS_SENSOR_PIN = 2;
+const int CROSSOVER_SENSOR_PIN = 2;
 
 // Relay control pins (Active LOW - relay energizes when pin is LOW)
 const int RELAY_LINE1_RIGHT_TO_LEFT = 3;  // Controls power to Line 1, right approach
 const int RELAY_LINE2_LEFT_TO_RIGHT = 4;  // Controls power to Line 2, left approach
 
-// Optional: LED indicators for visual feedback
-const int LED_LINE1_BLOCKED = 5;
-const int LED_LINE2_BLOCKED = 6;
-const int LED_POINTS_POSITION = 7;
-
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
-const int POINTS_FOR_LINE1 = LOW;   // Points set for Line 1 (right to left)
-const int POINTS_FOR_LINE2 = HIGH;  // Points set for Line 2 (left to right)
+const int CROSSOVER_ACTIVE = LOW;    // Crossover active (both lines blocked)
+const int CROSSOVER_INACTIVE = HIGH; // Crossover inactive (both lines free)
 
-const int TRACK_POWER_ON = HIGH;    // Relay OFF (power flows to track)
-const int TRACK_POWER_OFF = LOW;    // Relay ON (power cut from track)
+const int TRACK_POWER_ON = HIGH;     // Relay OFF (power flows to track)
+const int TRACK_POWER_OFF = LOW;     // Relay ON (power cut from track)
 
 const unsigned long DEBOUNCE_DELAY = 50;  // Debounce delay in milliseconds
 
@@ -56,8 +52,8 @@ const unsigned long DEBOUNCE_DELAY = 50;  // Debounce delay in milliseconds
 // GLOBAL VARIABLES
 // ============================================================================
 
-int currentPointsPosition = POINTS_FOR_LINE1;
-int lastPointsReading = POINTS_FOR_LINE1;
+int currentCrossoverState = CROSSOVER_ACTIVE;
+int lastCrossoverReading = CROSSOVER_ACTIVE;
 unsigned long lastDebounceTime = 0;
 
 // ============================================================================
@@ -67,34 +63,24 @@ unsigned long lastDebounceTime = 0;
 void setup() {
   // Initialize serial communication for debugging
   Serial.begin(9600);
-  Serial.println("Railway Crossover Control System Initializing...");
+  Serial.println("Railway Crossover Control System - Coacting Point Initializing...");
 
-  // Configure input pins (using external resistor divider, no pullup needed)
-  pinMode(POINTS_SENSOR_PIN, INPUT);
+  // Configure input pin (sensing LED voltage directly, no pullup needed)
+  pinMode(CROSSOVER_SENSOR_PIN, INPUT);
 
   // Configure relay output pins
   pinMode(RELAY_LINE1_RIGHT_TO_LEFT, OUTPUT);
   pinMode(RELAY_LINE2_LEFT_TO_RIGHT, OUTPUT);
 
-  // Configure LED indicator pins
-  pinMode(LED_LINE1_BLOCKED, OUTPUT);
-  pinMode(LED_LINE2_BLOCKED, OUTPUT);
-  pinMode(LED_POINTS_POSITION, OUTPUT);
+  // Initialize both tracks to blocked (safe default - crossover active)
+  digitalWrite(RELAY_LINE1_RIGHT_TO_LEFT, TRACK_POWER_OFF);
+  digitalWrite(RELAY_LINE2_LEFT_TO_RIGHT, TRACK_POWER_OFF);
 
-  // Initialize all tracks to powered (safe default)
-  digitalWrite(RELAY_LINE1_RIGHT_TO_LEFT, TRACK_POWER_ON);
-  digitalWrite(RELAY_LINE2_LEFT_TO_RIGHT, TRACK_POWER_ON);
-
-  // Initialize LEDs
-  digitalWrite(LED_LINE1_BLOCKED, LOW);
-  digitalWrite(LED_LINE2_BLOCKED, LOW);
-  digitalWrite(LED_POINTS_POSITION, LOW);
-
-  // Read initial points position
-  currentPointsPosition = digitalRead(POINTS_SENSOR_PIN);
+  // Read initial crossover state
+  currentCrossoverState = digitalRead(CROSSOVER_SENSOR_PIN);
 
   Serial.println("System Ready!");
-  Serial.println("Points Position: " + String(currentPointsPosition == POINTS_FOR_LINE1 ? "Line 1" : "Line 2"));
+  Serial.println("Crossover State: " + String(currentCrossoverState == CROSSOVER_ACTIVE ? "ACTIVE (both blocked)" : "INACTIVE (both free)"));
 }
 
 // ============================================================================
@@ -102,10 +88,10 @@ void setup() {
 // ============================================================================
 
 void loop() {
-  // Read points position with debouncing
-  readPointsPosition();
+  // Read crossover state with debouncing
+  readCrossoverState();
 
-  // Apply control logic based on points position
+  // Apply control logic based on crossover state
   controlTrackPower();
 
   // Small delay to prevent excessive loop iterations
@@ -117,93 +103,76 @@ void loop() {
 // ============================================================================
 
 /**
- * Read points position with debouncing to prevent false triggers
+ * Read crossover state with debouncing to prevent false triggers
  */
-void readPointsPosition() {
-  int reading = digitalRead(POINTS_SENSOR_PIN);
+void readCrossoverState() {
+  int reading = digitalRead(CROSSOVER_SENSOR_PIN);
 
   // If reading changed, reset debounce timer
-  if (reading != lastPointsReading) {
+  if (reading != lastCrossoverReading) {
     lastDebounceTime = millis();
   }
 
   // If reading has been stable for debounce delay, accept it
   if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
-    if (reading != currentPointsPosition) {
-      currentPointsPosition = reading;
+    if (reading != currentCrossoverState) {
+      currentCrossoverState = reading;
 
-      // Log points position change
-      Serial.println("Points changed to: " + String(currentPointsPosition == POINTS_FOR_LINE1 ? "Line 1 (R→L)" : "Line 2 (L→R)"));
-
-      // Update points position indicator LED
-      digitalWrite(LED_POINTS_POSITION, currentPointsPosition);
+      // Log crossover state change
+      Serial.println("Crossover changed to: " + String(currentCrossoverState == CROSSOVER_ACTIVE ? "ACTIVE (both blocked)" : "INACTIVE (both free)"));
     }
   }
 
-  lastPointsReading = reading;
+  lastCrossoverReading = reading;
 }
 
 /**
- * Control track power based on points position and traffic rules
+ * Control track power based on crossover state
  *
- * RULES:
- * - Line 1 L→R: Always powered (coacting points)
- * - Line 1 R→L: Powered only when points favor Line 1
- * - Line 2 L→R: Powered only when points favor Line 2
- * - Line 2 R→L: Always powered (free to go either way)
+ * COACTING POINT LOGIC:
+ * - When crossover ACTIVE (LOW): Both relays block both lines
+ *   - Line 1 R→L: BLOCKED
+ *   - Line 2 L→R: BLOCKED
+ * - When crossover INACTIVE (HIGH): Both relays allow traffic
+ *   - Line 1 R→L: FREE
+ *   - Line 2 L→R: FREE
  */
 void controlTrackPower() {
-  if (currentPointsPosition == POINTS_FOR_LINE1) {
-    // Points set for Line 1 (right to left traffic)
-
-    // Line 1 R→L: POWER ON (points favor this direction)
-    digitalWrite(RELAY_LINE1_RIGHT_TO_LEFT, TRACK_POWER_ON);
-    digitalWrite(LED_LINE1_BLOCKED, LOW);
-
-    // Line 2 L→R: POWER OFF (points against this direction)
+  if (currentCrossoverState == CROSSOVER_ACTIVE) {
+    // Crossover is active - block both lines
+    digitalWrite(RELAY_LINE1_RIGHT_TO_LEFT, TRACK_POWER_OFF);
     digitalWrite(RELAY_LINE2_LEFT_TO_RIGHT, TRACK_POWER_OFF);
-    digitalWrite(LED_LINE2_BLOCKED, HIGH);
 
-    if (Serial.available() == 0) {  // Only print once per change
-      static int lastState = -1;
-      if (lastState != 0) {
-        Serial.println("Status: Line 1 R→L OPEN | Line 2 L→R BLOCKED");
-        lastState = 0;
-      }
+    static int lastState = -1;
+    if (lastState != 0) {
+      Serial.println("Status: BOTH LINES BLOCKED");
+      lastState = 0;
     }
   }
   else {
-    // Points set for Line 2 (left to right traffic)
-
-    // Line 1 R→L: POWER OFF (points against this direction)
-    digitalWrite(RELAY_LINE1_RIGHT_TO_LEFT, TRACK_POWER_OFF);
-    digitalWrite(LED_LINE1_BLOCKED, HIGH);
-
-    // Line 2 L→R: POWER ON (points favor this direction)
+    // Crossover is inactive - both lines free
+    digitalWrite(RELAY_LINE1_RIGHT_TO_LEFT, TRACK_POWER_ON);
     digitalWrite(RELAY_LINE2_LEFT_TO_RIGHT, TRACK_POWER_ON);
-    digitalWrite(LED_LINE2_BLOCKED, LOW);
 
-    if (Serial.available() == 0) {  // Only print once per change
-      static int lastState = -1;
-      if (lastState != 1) {
-        Serial.println("Status: Line 1 R→L BLOCKED | Line 2 L→R OPEN");
-        lastState = 1;
-      }
+    static int lastState = -1;
+    if (lastState != 1) {
+      Serial.println("Status: BOTH LINES FREE");
+      lastState = 1;
     }
   }
 }
 
 /**
- * Optional: Manual points control function
- * Call this to manually set points position
+ * Optional: Manual crossover control function
+ * Call this to manually set crossover state
  */
-void setPointsPosition(int position) {
-  if (position == POINTS_FOR_LINE1 || position == POINTS_FOR_LINE2) {
-    // If using a servo or motor to control points
+void setCrossoverState(int state) {
+  if (state == CROSSOVER_ACTIVE || state == CROSSOVER_INACTIVE) {
+    // If using a servo or motor to control crossover
     // Add servo control code here
-    // servo.write(position == POINTS_FOR_LINE1 ? 0 : 90);
+    // servo.write(state == CROSSOVER_ACTIVE ? 0 : 90);
 
-    Serial.println("Points manually set to: " + String(position == POINTS_FOR_LINE1 ? "Line 1" : "Line 2"));
+    Serial.println("Crossover manually set to: " + String(state == CROSSOVER_ACTIVE ? "ACTIVE" : "INACTIVE"));
   }
 }
 
@@ -213,8 +182,6 @@ void setPointsPosition(int position) {
 void emergencyStop() {
   digitalWrite(RELAY_LINE1_RIGHT_TO_LEFT, TRACK_POWER_OFF);
   digitalWrite(RELAY_LINE2_LEFT_TO_RIGHT, TRACK_POWER_OFF);
-  digitalWrite(LED_LINE1_BLOCKED, HIGH);
-  digitalWrite(LED_LINE2_BLOCKED, HIGH);
 
   Serial.println("EMERGENCY STOP ACTIVATED!");
 }
