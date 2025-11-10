@@ -29,7 +29,8 @@ const int LIGHT_RIGHT_PIN = 10;
 // -----------------------------------------------------------------------------
 
 const int CALIBRATION_SAMPLES = 400;
-const int OCCUPANCY_THRESHOLD = 5;  // Reduced from 30 based on observed train signals (+4 to +8)
+const int OCCUPANCY_THRESHOLD = 3;  // Lowered to 3 for 100mA train signal (~2-4 ADC units)
+const int FILTER_SAMPLES = 5;  // Number of samples for moving average filter
 const unsigned long SENSOR_READ_INTERVAL = 100;  // Display update rate for continuous monitoring
 const int LIGHT_ACTIVE_STATE = HIGH;
 const int LIGHT_INACTIVE_STATE = LOW;
@@ -53,6 +54,20 @@ SensorData sensors[] = {
 };
 
 const size_t SENSOR_COUNT = sizeof(sensors) / sizeof(sensors[0]);
+
+// -----------------------------------------------------------------------------
+// SIGNAL FILTERING
+// -----------------------------------------------------------------------------
+
+// Moving average filter to reduce noise from low-current (100mA) signals
+int filterReading(int pin) {
+  long accumulator = 0;
+  for (int i = 0; i < FILTER_SAMPLES; ++i) {
+    accumulator += analogRead(pin);
+    delayMicroseconds(100);  // Small delay between samples
+  }
+  return accumulator / FILTER_SAMPLES;
+}
 
 // -----------------------------------------------------------------------------
 // MENU SYSTEM
@@ -197,7 +212,7 @@ void displayBaselines() {
   Serial.println(F("Threshold: "));
   Serial.print(F("  "));
   Serial.print(OCCUPANCY_THRESHOLD);
-  Serial.println(F(" ADC units from baseline"));
+  Serial.println(F(" ADC units from baseline (with 5-sample averaging)"));
   Serial.println();
 }
 
@@ -264,7 +279,7 @@ void testThresholdDetection() {
     unsigned long now = millis();
 
     for (size_t i = 0; i < SENSOR_COUNT; ++i) {
-      sensors[i].currentReading = analogRead(sensors[i].pin);
+      sensors[i].currentReading = filterReading(sensors[i].pin);
       sensors[i].delta = sensors[i].currentReading - sensors[i].baseline;
       sensors[i].thresholdExceeded = abs(sensors[i].delta) >= OCCUPANCY_THRESHOLD;
 
@@ -396,9 +411,9 @@ void testFullSystem() {
   Serial.println(F("Waiting for West sensor activation..."));
 
   while (true) {
-    // Read sensors
+    // Read sensors with filtering
     for (size_t i = 0; i < SENSOR_COUNT; ++i) {
-      sensors[i].currentReading = analogRead(sensors[i].pin);
+      sensors[i].currentReading = filterReading(sensors[i].pin);
       sensors[i].delta = sensors[i].currentReading - sensors[i].baseline;
       sensors[i].thresholdExceeded = abs(sensors[i].delta) >= OCCUPANCY_THRESHOLD;
     }
@@ -482,9 +497,9 @@ void continuousMonitor() {
   while (!Serial.available()) {
     unsigned long now = millis();
 
-    // Read sensors
+    // Read sensors with filtering to reduce noise
     for (size_t i = 0; i < SENSOR_COUNT; ++i) {
-      sensors[i].currentReading = analogRead(sensors[i].pin);
+      sensors[i].currentReading = filterReading(sensors[i].pin);
       sensors[i].delta = sensors[i].currentReading - sensors[i].baseline;
       sensors[i].thresholdExceeded = abs(sensors[i].delta) >= OCCUPANCY_THRESHOLD;
     }
