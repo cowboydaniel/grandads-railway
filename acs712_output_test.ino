@@ -29,7 +29,7 @@ const int LIGHT_RIGHT_PIN = 10;
 // -----------------------------------------------------------------------------
 
 const int CALIBRATION_SAMPLES = 400;
-const int OCCUPANCY_THRESHOLD = 30;
+const int OCCUPANCY_THRESHOLD = 5;  // Reduced from 30 based on observed train signals (+4 to +8)
 const unsigned long SENSOR_READ_INTERVAL = 100;  // Display update rate for continuous monitoring
 const int LIGHT_ACTIVE_STATE = HIGH;
 const int LIGHT_INACTIVE_STATE = LOW;
@@ -468,6 +468,7 @@ void testFullSystem() {
 void continuousMonitor() {
   Serial.println(F("\n=== Test 6: Continuous Monitor Mode ==="));
   Serial.println(F("Real-time display of all sensor and output states."));
+  Serial.println(F("Lights will activate automatically when train detected."));
   Serial.println(F("Send any character to stop.\n"));
   delay(1000);
 
@@ -475,6 +476,8 @@ void continuousMonitor() {
   while (Serial.available()) {
     Serial.read();
   }
+
+  bool crossingActive = false;
 
   while (!Serial.available()) {
     unsigned long now = millis();
@@ -486,7 +489,28 @@ void continuousMonitor() {
       sensors[i].thresholdExceeded = abs(sensors[i].delta) >= OCCUPANCY_THRESHOLD;
     }
 
-    // Read light states
+    // Determine if any sensor is detecting
+    bool anyDetection = sensors[0].thresholdExceeded || sensors[1].thresholdExceeded;
+
+    // Update crossing state
+    if (anyDetection && !crossingActive) {
+      crossingActive = true;
+      Serial.println(F("\n*** CROSSING ACTIVATED ***"));
+    } else if (!anyDetection && crossingActive) {
+      crossingActive = false;
+      digitalWrite(LIGHT_LEFT_PIN, LIGHT_INACTIVE_STATE);
+      digitalWrite(LIGHT_RIGHT_PIN, LIGHT_INACTIVE_STATE);
+      Serial.println(F("\n*** CROSSING DEACTIVATED ***"));
+    }
+
+    // Control lights - alternating flash when active
+    if (crossingActive) {
+      bool leftOn = ((now / 500) % 2) == 0;
+      digitalWrite(LIGHT_LEFT_PIN, leftOn ? LIGHT_ACTIVE_STATE : LIGHT_INACTIVE_STATE);
+      digitalWrite(LIGHT_RIGHT_PIN, leftOn ? LIGHT_INACTIVE_STATE : LIGHT_ACTIVE_STATE);
+    }
+
+    // Read light states for display
     int leftState = digitalRead(LIGHT_LEFT_PIN);
     int rightState = digitalRead(LIGHT_RIGHT_PIN);
 
@@ -515,7 +539,9 @@ void continuousMonitor() {
     delay(SENSOR_READ_INTERVAL);
   }
 
-  // Clear input
+  // Clear input and turn off lights
   while (Serial.available()) Serial.read();
+  digitalWrite(LIGHT_LEFT_PIN, LIGHT_INACTIVE_STATE);
+  digitalWrite(LIGHT_RIGHT_PIN, LIGHT_INACTIVE_STATE);
   Serial.println(F("\nMonitor stopped.\n"));
 }
